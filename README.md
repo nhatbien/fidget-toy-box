@@ -1,5 +1,7 @@
 # Fidget Toy Box 🧸
 
+**Chơi thử:** https://nhatbien.github.io/fidget-toy-box/
+
 Game HTML5 thư giãn gồm 12 món đồ chơi chống stress: Pop It, con quay, xốp nổ, slime, bảng
 công tắc, đàn gõ, cát động lực, bóng bay, trống điện tử, vẽ xoay, vườn thiền và con lắc Newton.
 Game viết bằng JavaScript thuần với Canvas 2D, không dùng thư viện ngoài. Toàn bộ âm thanh được
@@ -48,6 +50,14 @@ Lệnh trên tạo ra:
 | `dist/fidget-toy-box-youtube.zip` | Upload lên YouTube Playables Developer Portal (đã nạp SDK `game_api/v1`) |
 | `dist/fidget-toy-box-web.zip` | Upload lên itch.io, CrazyGames, GameDistribution, Netlify… |
 | `dist/web/` | Thư mục web tĩnh, kéo thả lên Netlify Drop hoặc GitHub Pages |
+
+## Cập nhật bản online
+
+Sửa code xong, chạy lệnh sau để build và đưa lên GitHub Pages:
+
+```bash
+npm run deploy
+```
 
 ## Có link public để điền form YouTube
 

@@ -2,10 +2,11 @@
   "name": "fidget-toy-box",
   "version": "1.0.0",
   "private": true,
-  "description": "Fidget Toy Box — a relaxing antistress HTML5 game (YouTube Playables ready)",
+  "description": "Fidget Toy Box \u2014 a relaxing antistress HTML5 game (YouTube Playables ready)",
   "scripts": {
     "dev": "node tools/devserver.mjs 5173",
-    "build": "node tools/build.mjs"
+    "build": "node tools/build.mjs",
+    "deploy": "sh tools/deploy-pages.sh"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"

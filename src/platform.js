@@ -1,7 +1,8 @@
 // Host platform adapter. Inside YouTube Playables it uses the official SDK (ytgame.*) for
 // lifecycle, cloud save, audio state, pause/resume, language and ads, as required by the
 // Playables certification rules. On any other host (itch.io, CrazyGames, your own site)
-// it falls back to standard web APIs.
+// it falls back to standard web APIs. Inside the iOS app (WKWebView) save data and haptics go
+// through the native bridge `window.webkit.messageHandlers.ftb`.
 
 const SAVE_KEY = 'fidget-toy-box-save-v1';
 
@@ -13,10 +14,20 @@ function getYt() {
   return null;
 }
 
+function getNative() {
+  try {
+    if (window.__FTB_IOS__ && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ftb) {
+      return window.webkit.messageHandlers.ftb;
+    }
+  } catch (e) { /* not in the iOS app */ }
+  return null;
+}
+
 class Platform {
   constructor() {
     this.yt = getYt();
-    this.name = this.yt ? 'youtube' : 'web';
+    this.native = this.yt ? null : getNative();
+    this.name = this.yt ? 'youtube' : this.native ? 'ios' : 'web';
     this.loaded = false; // cloud save must be loaded before saving
     this._pauseCbs = [];
     this._resumeCbs = [];
@@ -45,6 +56,9 @@ class Platform {
       } catch (e) { this.warn(e); }
       return;
     }
+    // The iOS app also calls these directly when the scene goes to the background.
+    window.__ftbPause = () => onPause();
+    window.__ftbResume = () => onResume();
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) onPause();
       else onResume();
@@ -82,6 +96,8 @@ class Platform {
       } catch (e) {
         this.warn(e);
       }
+    } else if (this.native) {
+      str = typeof window.__FTB_SAVE__ === 'string' ? window.__FTB_SAVE__ : '';
     } else {
       try { str = localStorage.getItem(SAVE_KEY) || ''; } catch (e) { /* storage blocked */ }
     }
@@ -102,6 +118,14 @@ class Platform {
           return false;
         }
       }
+      if (this.native) {
+        try {
+          this.native.postMessage({ type: 'save', data: str });
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
       try {
         localStorage.setItem(SAVE_KEY, str);
         return true;
@@ -110,6 +134,15 @@ class Platform {
       }
     });
     return this._saving;
+  }
+
+  // ---------- haptics ----------
+  /** True when vibration is handled natively (iOS Taptic Engine). */
+  get hasNativeHaptics() {
+    return !!this.native;
+  }
+  haptic(ms) {
+    try { this.native?.postMessage({ type: 'haptic', ms }); } catch (e) { /* ignore */ }
   }
 
   // ---------- ads (YouTube-provided only) ----------

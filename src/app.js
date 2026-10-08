@@ -224,10 +224,15 @@ export class App {
   // ======================================================== services for toys
   haptic(ms = 12) {
     if (!this.data.settings.haptics) return;
-    // Browsers block (and warn about) vibration before the first real user gesture.
-    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
     const now = performance.now();
     if (now - this._lastHaptic < 35) return;
+    if (platform.hasNativeHaptics) {
+      this._lastHaptic = now;
+      platform.haptic(ms);
+      return;
+    }
+    // Browsers block (and warn about) vibration before the first real user gesture.
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
     this._lastHaptic = now;
     try {
       if (navigator.vibrate) navigator.vibrate(ms);

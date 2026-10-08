@@ -121,7 +121,32 @@ chấp nhận. Cách nhanh nhất:
   - Code được chuyển về chuẩn ES2019 để chạy trên các trình duyệt cũ hơn.
 - **Đối chiếu với SDK thật:** đã kiểm tra với SDK thật (phiên bản 1.20260928), cả 14 hàm game gọi đều tồn tại.
 
-## Tạo lại ảnh bằng Codex CLI
+## Bản iOS (iPhone / iPad)
+
+Thư mục `ios/` là app iOS gốc viết bằng Swift: một `WKWebView` chạy bản web build có sẵn bên trong
+app, chơi được offline. Cầu nối native (`window.webkit.messageHandlers.ftb`) lo phần:
+
+- **Lưu tiến độ:** dữ liệu lưu vào `UserDefaults`, vẫn còn sau khi tắt hẳn app.
+- **Rung:** dùng Taptic Engine, vì Safari trên iOS không hỗ trợ `navigator.vibrate`.
+- **Tạm dừng:** game tự tạm dừng khi app ra nền.
+- **Âm thanh:** dùng chế độ `ambient`, nên tôn trọng nút gạt im lặng và không cắt nhạc đang phát của người chơi.
+
+Mỗi lần sửa game, chạy lệnh sau để build lại bản web, chép vào `ios/FidgetToyBox/Web` và sinh lại
+project (cần `brew install xcodegen`):
+
+```bash
+npm run ios
+```
+
+Mở `ios/FidgetToyBox.xcodeproj` trong Xcode, chọn simulator hoặc iPhone thật rồi bấm Run.
+
+Để đưa lên App Store:
+- Trong Xcode chọn target **FidgetToyBox** → *Signing & Capabilities* → chọn Team (tài khoản Apple
+  Developer 99 USD/năm). Bundle ID mặc định là `com.nhatbien.fidgettoybox`.
+- Vào *Product → Archive → Distribute App → App Store Connect*.
+- Ảnh chụp lấy từ `store/screenshots/`; mục quyền riêng tư khai báo *Data Not Collected*.
+
+
 
 Toàn bộ ảnh do Codex CLI (`codex exec --enable image_generation`) tạo. Prompt nằm trong
 `tools/image_prompts.json`.

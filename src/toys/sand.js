@@ -314,6 +314,8 @@ const SHAPES = [
   },
 ];
 
+let SHAPE_ICONS = null; // outlines for the picker chips, built on first draw
+
 /** Small seeded PRNG so a texture re-rendered after a resize keeps its sparkles in place. */
 function rng(seed) {
   let a = seed >>> 0;
@@ -340,7 +342,12 @@ export class SandToy extends Toy {
     this.darkCols = new Map();
     this.twinkles = [];
     this.trails = [];
+    this.patterN = 0; // grains landed since the last patter sound, and their summed x
+    this.patterX = 0;
+    this.patterT = 0;
     this.shapeIdx = -1;
+    this.shapeSel = -1; // picked shape, -1 = shuffle
+    this.chipPop = new Float32Array(SHAPES.length + 1);
     this.respawnT = 0;
     this.BW = 1200;
     this.TW = 1800;
@@ -360,6 +367,7 @@ export class SandToy extends Toy {
     this.drags.clear();
     this.trails.length = 0;
     this.scrape.stop();
+    this.app.audio.duckMusic(0);
   }
   setVariant() {
     this.tray = null;
@@ -372,10 +380,32 @@ export class SandToy extends Toy {
     this.layout();
   }
 
+  // ---------------------------------------------------------------- shape picker
+  /** Row of shape chips along the top of the play area: shuffle first, then every shape. */
+  shapeBar() {
+    const a = this.area, n = SHAPES.length + 1;
+    const r = G.clamp(a.w / (n * 2.7), 13, 22), gap = r * 0.55;
+    const total = n * r * 2 + (n - 1) * gap;
+    const chips = [];
+    for (let i = 0; i < n; i++) chips.push({ shape: i - 1, x: a.x + (a.w - total) / 2 + r + i * (r * 2 + gap), y: a.y + r + 4, r });
+    return { chips, h: r * 2 + 14 };
+  }
+  playArea() {
+    const a = this.area, h = this.shapeBar().h;
+    return { x: a.x, y: a.y + h, w: a.w, h: Math.max(40, a.h - h) };
+  }
+  pickShape(s) {
+    this.shapeSel = s;
+    this.chipPop[s + 1] = 1;
+    this.replaceBlock();
+    this.app.audio.whoosh(0.6);
+    this.app.haptic(8);
+  }
+
   // ---------------------------------------------------------------- layout
   /** Fits block + tray into the play area and re-renders the cached art at the new scale. */
   layout() {
-    const a = this.area, BW = this.BW;
+    const a = this.playArea(), BW = this.BW;
     const M = 170 + BW * 0.12; // floor space on each side for slabs to tip into
     const TW = BW + M * 2;
     if (TW !== this.TW || this.heights.length !== Math.ceil(TW / BIN)) {
@@ -404,13 +434,16 @@ export class SandToy extends Toy {
 
   // ---------------------------------------------------------------- blocks
   newBlock(drop) {
-    const a = this.area;
+    const a = this.playArea();
     const aspect = a.w / Math.max(1, a.h);
     // a chunky block whatever the screen shape: wide screens get a longer loaf, tall ones a cube
     this.BW = Math.round(G.clamp((aspect * 1300 - 520) / 1.45, 760, 2300));
-    // a different shape from last time
-    let si = (Math.random() * SHAPES.length) | 0;
-    if (SHAPES.length > 1 && si === this.shapeIdx) si = (si + 1 + ((Math.random() * (SHAPES.length - 1)) | 0)) % SHAPES.length;
+    // the picked shape, or (on shuffle) a different one from last time
+    let si = this.shapeSel;
+    if (si < 0) {
+      si = (Math.random() * SHAPES.length) | 0;
+      if (si === this.shapeIdx) si = (si + 1 + ((Math.random() * (SHAPES.length - 1)) | 0)) % SHAPES.length;
+    }
     this.shapeIdx = si;
     const pts = SHAPES[si](this.BW, BH);
     let foot = 0; // half-width of the part standing on the floor
@@ -443,7 +476,7 @@ export class SandToy extends Toy {
         x1 = Math.max(x1, p[0]);
       }
       this.crumble(b.pts, b.tex, this.blockMatrix(b), cx, (x1 - x0) * 0.6 + 80, frac * 0.6);
-      this.app.audio.crumble(0.9, 0, 0.5);
+      this.app.audio.sandFall(1.2, 0, 0.5);
     }
     this.respawnT = 0;
     this.newBlock(true);
@@ -575,6 +608,12 @@ export class SandToy extends Toy {
 
   // ---------------------------------------------------------------- input
   pointerDown(p) {
+    for (const c of this.shapeBar().chips) {
+      if (Math.hypot(p.x - c.x, p.y - c.y) < c.r + 6) {
+        this.pickShape(c.shape);
+        return;
+      }
+    }
     const [ux, uy] = this.toDu(p.x, p.y);
     const d = { id: p.id, x: p.x, y: p.y, ux, uy, inside: false, entry: null, trail: null, moved: 0, speed: 0, crumbT: 0, up: false, dirX: 0, dirY: 1 };
     if (this.canCut() && inPoly(this.block.pts, ux, uy)) {
@@ -634,6 +673,10 @@ export class SandToy extends Toy {
   keyDown(e) {
     if (e.key === 'r' || e.key === 'R') {
       this.refresh();
+      return true;
+    }
+    if (e.key === 's' || e.key === 'S') {
+      this.pickShape(this.shapeSel + 1 < SHAPES.length ? this.shapeSel + 1 : -1);
       return true;
     }
     if (e.key === ' ' || e.key === 'Enter') {
@@ -736,9 +779,12 @@ export class SandToy extends Toy {
 
     const sx = this.ox + ((E[0] + X[0]) / 2) * this.S, sy = this.oy + ((E[1] + X[1]) / 2) * this.S;
     const pan = G.clamp((sx / app.w - 0.5) * 1.2, -0.8, 0.8);
-    app.audio.noise({ dur: 0.16, vol: 0.16, type: 'bandpass', freq: 1500, freqEnd: 600, q: 0.8, color: 'brown', pan });
+    app.audio.noise({ dur: 0.2, vol: 0.42, type: 'bandpass', freq: 1500, freqEnd: 600, q: 0.8, color: 'brown', pan });
+    app.audio.noise({ dur: 0.09, vol: 0.14, type: 'highpass', freq: 2800, pan });
     app.haptic(10);
     app.stat('cuts');
+    this.duckT = 0.6;
+    app.audio.duckMusic(0.65);
     app.addProgress(0.08, d && d.x !== undefined ? d.x : sx, d && d.y !== undefined ? d.y : sy);
 
     // crumbs shaken loose along the cut
@@ -754,7 +800,7 @@ export class SandToy extends Toy {
       // tiny corners just crumble on the spot
       const [lcx] = centroid(lose);
       this.crumble(lose, b.tex, [1, 0, 0, 1, 0, 0], lcx, 70, frac);
-      app.audio.crumble(0.5, pan, 0.2);
+      app.audio.sandFall(0.55, pan, 0.2);
     } else {
       this.pieces.push(this.makePiece(lose, keep, E, X, d, frac));
     }
@@ -916,6 +962,8 @@ export class SandToy extends Toy {
           H[bin] += g.h;
           g.st = 1;
           g.t = 0;
+          this.patterN++;
+          this.patterX += g.x;
         }
       } else {
         g.t += dt;
@@ -978,7 +1026,7 @@ export class SandToy extends Toy {
       }
       if (d.inside && !d.up && this.canCut()) {
         const k = G.clamp(d.speed / 1100, 0, 1);
-        vol = Math.max(vol, 0.035 + 0.2 * k);
+        vol = Math.max(vol, 0.09 + 0.45 * k);
         freq = 700 + 600 * k;
         if (d.speed > 60) {
           cutting = d;
@@ -992,8 +1040,12 @@ export class SandToy extends Toy {
       }
     }
     this.scrape.set({ vol, freq });
+    // the music steps back while a finger is carving, and for a moment after each slice
+    this.duckT = vol > 0 ? 0.6 : Math.max(0, (this.duckT || 0) - dt);
+    app.audio.duckMusic(this.duckT > 0 ? 0.65 : 0);
     if (cutting) app.addProgress(0.2 * dt, cutting.x, cutting.y);
 
+    for (let i = 0; i < this.chipPop.length; i++) this.chipPop[i] = Math.max(0, this.chipPop[i] - dt / 0.25);
     // finished grooves fade out
     let j = 0;
     for (const t of this.trails) {
@@ -1004,6 +1056,14 @@ export class SandToy extends Toy {
 
     this.updatePieces(dt);
     this.updateGrains(dt);
+    this.patterT -= dt;
+    if (this.patterN > 0 && this.patterT <= 0) {
+      const sx = this.ox + (this.patterX / this.patterN) * this.S;
+      app.audio.grains(this.patterN, G.clamp((sx / app.w - 0.5) * 1.2, -0.8, 0.8));
+      this.patterN = 0;
+      this.patterX = 0;
+      this.patterT = 0.035;
+    }
   }
 
   updatePieces(dt) {
@@ -1080,7 +1140,7 @@ export class SandToy extends Toy {
     this.crumble(p.pts, p.tex, m, hx, G.clamp((x1 - x0) * 0.5 + 70, 90, 260), p.frac);
     const sx = this.ox + wx * this.S, sy = this.oy + wy * this.S;
     const pan = G.clamp((sx / app.w - 0.5) * 1.2, -0.8, 0.8);
-    app.audio.crumble(G.clamp(0.55 + p.frac * 2.5, 0.55, 1.2), pan, G.clamp(0.25 + p.frac * 1.2, 0.25, 0.7));
+    app.audio.sandFall(G.clamp(0.8 + p.frac * 3, 0.8, 1.6), pan, G.clamp(0.3 + p.frac * 1.2, 0.3, 0.75));
     app.haptic(8);
     app.fx.burst(sx, sy, { count: 10, colors: ['rgba(255,255,255,0.7)', G.shade(p.tex.pal[2], 0.45)], shape: 'circle', speed: [40, 170], size: [2, 5], gravity: 160, life: [0.3, 0.6], drag: 0.85 });
   }
@@ -1164,17 +1224,12 @@ export class SandToy extends Toy {
     if (n < 3 || !tex.canvas) return;
     const S = this.S, ox = this.ox, oy = this.oy;
     const P = new Array(n);
-    let mx = 0, my = 0;
     for (let i = 0; i < n; i++) {
       const x = pts[i][0], y = pts[i][1];
-      const sx = ox + (m[0] * x + m[2] * y + m[4]) * S, sy = oy + (m[1] * x + m[3] * y + m[5]) * S;
-      P[i] = [sx, sy];
-      mx += sx;
-      my += sy;
+      P[i] = [ox + (m[0] * x + m[2] * y + m[4]) * S, oy + (m[1] * x + m[3] * y + m[5]) * S];
     }
-    mx /= n;
-    my /= n;
-    const [lcx, lcy] = centroid(pts);
+    // winding decides which side of each edge is outside (curved cuts leave hollows, so no centroid tricks)
+    const wind = polyArea(pts) > 0 ? 1 : -1;
     const dsx = DX * S, dsy = -DY * S;
     const dl = Math.hypot(DX, DY), ddx = DX / dl, ddy = -DY / dl;
     const TH = 10; // du of texture smeared across the depth of a side face
@@ -1185,11 +1240,7 @@ export class SandToy extends Toy {
       const ex = b[0] - a[0], ey = b[1] - a[1];
       const el = Math.hypot(ex, ey);
       if (el < 0.01) continue;
-      let nx = ey / el, ny = -ex / el;
-      if (nx * ((a[0] + b[0]) / 2 - mx) + ny * ((a[1] + b[1]) / 2 - my) < 0) {
-        nx = -nx;
-        ny = -ny;
-      }
+      const nx = (wind * ey) / el, ny = (-wind * ex) / el;
       if (nx * ddx + ny * ddy <= 0.02) continue; // faces away from us
       ctx.beginPath();
       ctx.moveTo(a[0], a[1]);
@@ -1208,11 +1259,7 @@ export class SandToy extends Toy {
         // map texture → screen so the colors along this edge stretch back along the depth
         const lx = p1[0] - p0[0], ly = p1[1] - p0[1], ll = Math.hypot(lx, ly) || 1;
         const elx = lx / ll, ely = ly / ll;
-        let mlx = -ely, mly = elx;
-        if (mlx * (lcx - (p0[0] + p1[0]) / 2) + mly * (lcy - (p0[1] + p1[1]) / 2) < 0) {
-          mlx = -mlx;
-          mly = -mly;
-        }
+        const mlx = -wind * ely, mly = wind * elx; // inward
         const sex = ex / ll, sey = ey / ll;
         const A00 = sex * elx + (dsx / TH) * mlx, A01 = sex * ely + (dsx / TH) * mly;
         const A10 = sey * elx + (dsy / TH) * mlx, A11 = sey * ely + (dsy / TH) * mly;
@@ -1249,11 +1296,7 @@ export class SandToy extends Toy {
     for (let i = 0; i < n; i++) {
       const a = P[i], b = P[(i + 1) % n];
       const ex = b[0] - a[0], ey = b[1] - a[1], el = Math.hypot(ex, ey) || 1;
-      let nx = ey / el, ny = -ex / el;
-      if (nx * ((a[0] + b[0]) / 2 - mx) + ny * ((a[1] + b[1]) / 2 - my) < 0) {
-        nx = -nx;
-        ny = -ny;
-      }
+      const nx = (wind * ey) / el, ny = (-wind * ex) / el;
       if (ny < -0.45) {
         ctx.moveTo(a[0], a[1]);
         ctx.lineTo(b[0], b[1]);
@@ -1426,6 +1469,53 @@ export class SandToy extends Toy {
     this.drawTrails(ctx, bm);
     for (const [p, m] of front) this.drawPrism(ctx, p.pts, p.tex, m);
     this.drawGrains(ctx);
+    this.drawShapeBar(ctx, st);
+  }
+
+  drawShapeBar(ctx, st) {
+    if (!SHAPE_ICONS) SHAPE_ICONS = SHAPES.map((f) => f(1300, BH));
+    for (const c of this.shapeBar().chips) {
+      const sel = c.shape === this.shapeSel;
+      const r = c.r * (sel ? 1.1 : 1) * (1 + 0.15 * Math.sin(this.chipPop[c.shape + 1] * Math.PI));
+      G.circle(ctx, c.x, c.y + 2, r + 3);
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fill();
+      G.circle(ctx, c.x, c.y, r + 3);
+      ctx.fillStyle = sel ? '#ffd23f' : 'rgba(255,255,255,0.85)';
+      ctx.fill();
+      G.circle(ctx, c.x, c.y, r);
+      ctx.fillStyle = '#fffaf4';
+      ctx.fill();
+      if (c.shape < 0) {
+        G.drawIcon(ctx, 'shuffle', c.x, c.y, r * 1.15, '#8a6a52');
+        continue;
+      }
+      // the outline filled with this style's sand stripes
+      const pts = SHAPE_ICONS[c.shape];
+      let x0 = Infinity, x1 = -Infinity;
+      for (const p of pts) {
+        x0 = Math.min(x0, p[0]);
+        x1 = Math.max(x1, p[0]);
+      }
+      const k = (r * 1.3) / Math.max(x1 - x0, BH);
+      ctx.save();
+      ctx.translate(c.x - ((x0 + x1) / 2) * k, c.y + (BH / 2) * k);
+      ctx.scale(k, k);
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+      ctx.closePath();
+      ctx.save();
+      ctx.clip();
+      for (let i = 0; i < NL; i++) {
+        ctx.fillStyle = st.layers[i];
+        ctx.fillRect(x0, -BH + (i * BH) / NL, x1 - x0, BH / NL + 2);
+      }
+      ctx.restore();
+      ctx.lineWidth = 1.5 / k;
+      ctx.strokeStyle = 'rgba(60,30,10,0.3)';
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   hud() {

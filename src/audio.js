@@ -105,10 +105,17 @@ export class AudioEngine {
     this.sfxOn = !!on;
     if (this.sfxBus) this.sfxBus.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.02);
   }
+  /** Pulls the music down by `amount` (0..1) so a toy's own sound can stand out; 0 restores it. */
+  duckMusic(amount) {
+    amount = clamp(amount, 0, 1);
+    if (amount === (this._duck || 0)) return;
+    this._duck = amount;
+    if (this.ctx && this.musicOn) this.musicBus.gain.setTargetAtTime(0.55 * (1 - amount), this.ctx.currentTime, amount ? 0.08 : 0.4);
+  }
   setMusic(on) {
     this.musicOn = !!on;
     if (!this.ctx) return;
-    this.musicBus.gain.setTargetAtTime(on ? 0.55 : 0, this.ctx.currentTime, 0.3);
+    this.musicBus.gain.setTargetAtTime(on ? 0.55 * (1 - (this._duck || 0)) : 0, this.ctx.currentTime, 0.3);
     if (on) this.startMusic();
     else this.stopMusic();
   }
@@ -328,6 +335,34 @@ export class AudioEngine {
       this.noise({ dur: rand(0.02, 0.06), vol: rand(0.05, 0.14) * v, type: 'bandpass', freq: rand(900, 3200), q: 0.9, when: rand(0, len), pan, color: 'brown' });
     }
     this.noise({ dur: len, vol: 0.12 * v, type: 'lowpass', freq: 900, freqEnd: 300, q: 0.5, pan, color: 'brown', attack: 0.03 });
+  }
+  /**
+   * Kinetic sand collapsing (ASMR-style): a soft, damp plop, a hissing pour that swells and
+   * fades, and a crackle of grains thick at the start and thinning out over `len` seconds.
+   */
+  sandFall(v = 1, pan = 0, len = 0.4) {
+    // body: the slab giving way under its own weight
+    this.tone({ freq: rand(64, 78), freqEnd: 38, dur: 0.24, vol: 0.32 * v, attack: 0.006, pan });
+    this.noise({ dur: 0.2, vol: 0.32 * v, type: 'lowpass', freq: 420, freqEnd: 160, q: 0.7, attack: 0.004, pan, color: 'brown' });
+    // pour: a soft hiss plus a fuller rush underneath
+    this.noise({ dur: len * 1.5, vol: 0.09 * v, type: 'bandpass', freq: rand(3200, 4200), freqEnd: 1700, q: 0.6, attack: 0.05, pan });
+    this.noise({ dur: len * 1.2, vol: 0.22 * v, type: 'lowpass', freq: 1400, freqEnd: 380, q: 0.6, attack: 0.025, pan, color: 'brown' });
+    // crackle: lots of tiny grain ticks, crowded near the start
+    const n = Math.round(22 + 44 * len);
+    for (let i = 0; i < n; i++) {
+      this.noise({
+        dur: rand(0.006, 0.022), vol: rand(0.03, 0.1) * v, type: 'bandpass', freq: rand(2400, 7200), q: rand(1, 2.2),
+        when: len * 1.3 * Math.pow(Math.random(), 1.8), pan: clamp(pan + rand(-0.3, 0.3), -1, 1),
+      });
+    }
+  }
+  /** A few grains pattering onto a pile (n = how many just landed). */
+  grains(n, pan = 0) {
+    const k = Math.min(4, n);
+    const v = Math.min(1, 0.35 + Math.sqrt(n) * 0.18);
+    for (let i = 0; i < k; i++) {
+      this.noise({ dur: rand(0.005, 0.016), vol: rand(0.025, 0.07) * v, type: 'bandpass', freq: rand(2600, 6800), q: rand(1, 2), when: rand(0, 0.035), pan: clamp(pan + rand(-0.15, 0.15), -1, 1) });
+    }
   }
   /** Steel ball click (Newton's cradle). */
   clack(v = 1, pan = 0) {

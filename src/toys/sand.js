@@ -20,14 +20,14 @@ function countWord(lang, forms, n) {
   return n === 1 ? f[0] : f[1];
 }
 
-// layers top → bottom, tray plastic, backdrop, knife handle
+// layers top → bottom, tray plastic, backdrop
 const STYLES = [
-  { layers: ['#ff9ebb', '#ffb38a', '#ffe08a', '#a8e6a1', '#8fd3ff', '#c3a6ff'], tray: '#8fdcf5', bg: ['#fff1e6', '#ffcfdc'], knife: '#ff6fa8' },
-  { layers: ['#d4f4fb', '#90e0ef', '#48cae4', '#00b4d8', '#0091c2', '#0068a8'], tray: '#ffd6a5', bg: ['#e3f8ff', '#a6dcf0'], knife: '#ff8c42' },
-  { layers: ['#ffd166', '#ffb347', '#ff8c42', '#ff6b6b', '#f45b8d', '#c94b9f'], tray: '#9ad7ee', bg: ['#fff3c4', '#ffc2a6'], knife: '#4cc9f0' },
-  { layers: ['#b8f2d0', '#7a4a2e', '#9ae6bd', '#5c3520', '#c9f5dd', '#6b3e26'], tray: '#f3e3cb', bg: ['#effff4', '#c2ead2'], knife: '#4fc58b' },
-  { layers: ['#e9b8ff', '#c77dff', '#9d4edd', '#7b2cbf', '#5a189a', '#3c096c'], tray: '#3a3170', bg: ['#3d2c80', '#160f34'], knife: '#ff5fd2', sparkle: true },
-  { layers: ['#ff2e97', '#ff9e00', '#ffee32', '#39ff14', '#00f0ff', '#b84dff'], tray: '#33334a', bg: ['#2c2c48', '#121220'], knife: '#00e5ff' },
+  { layers: ['#ff9ebb', '#ffb38a', '#ffe08a', '#a8e6a1', '#8fd3ff', '#c3a6ff'], tray: '#8fdcf5', bg: ['#fff1e6', '#ffcfdc'] },
+  { layers: ['#d4f4fb', '#90e0ef', '#48cae4', '#00b4d8', '#0091c2', '#0068a8'], tray: '#ffd6a5', bg: ['#e3f8ff', '#a6dcf0'] },
+  { layers: ['#ffd166', '#ffb347', '#ff8c42', '#ff6b6b', '#f45b8d', '#c94b9f'], tray: '#9ad7ee', bg: ['#fff3c4', '#ffc2a6'] },
+  { layers: ['#b8f2d0', '#7a4a2e', '#9ae6bd', '#5c3520', '#c9f5dd', '#6b3e26'], tray: '#f3e3cb', bg: ['#effff4', '#c2ead2'] },
+  { layers: ['#e9b8ff', '#c77dff', '#9d4edd', '#7b2cbf', '#5a189a', '#3c096c'], tray: '#3a3170', bg: ['#3d2c80', '#160f34'], sparkle: true },
+  { layers: ['#ff2e97', '#ff9e00', '#ffee32', '#39ff14', '#00f0ff', '#b84dff'], tray: '#33334a', bg: ['#2c2c48', '#121220'] },
 ];
 
 const BH = 1000; // block height (du)
@@ -124,6 +124,109 @@ function segHits(pts, ax, ay, bx, by) {
   return hits.filter((h, i) => i === 0 || h.t - hits[i - 1].t > 1e-6);
 }
 
+/** The polygon edge closest to a point: { i (edge pts[i] → pts[i+1]), t (0..1 along it), d (distance) }. */
+function nearestEdge(pts, x, y) {
+  let best = null;
+  for (let i = 0, n = pts.length; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    const ex = q[0] - p[0], ey = q[1] - p[1], l2 = ex * ex + ey * ey || 1;
+    const t = G.clamp(((x - p[0]) * ex + (y - p[1]) * ey) / l2, 0, 1);
+    const d = Math.hypot(p[0] + ex * t - x, p[1] + ey * t - y);
+    if (!best || d < best.d) best = { i, t, d };
+  }
+  return best;
+}
+
+/** Crossing point of segments a→b and c→d, or null. */
+function segCross(a, b, c, d) {
+  const rx = b[0] - a[0], ry = b[1] - a[1], sx = d[0] - c[0], sy = d[1] - c[1];
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / den;
+  const u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / den;
+  return t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6 ? [a[0] + rx * t, a[1] + ry * t] : null;
+}
+
+/** Cuts the loops out of a scribbled path so it never crosses itself. */
+function untangle(path) {
+  const out = [path[0]];
+  for (let k = 1; k < path.length; k++) {
+    const q = path[k];
+    for (let j = out.length - 3; j >= 0; j--) {
+      const x = segCross(out[out.length - 1], q, out[j], out[j + 1]);
+      if (x) {
+        out.length = j + 1;
+        out.push(x);
+        break;
+      }
+    }
+    out.push(q);
+  }
+  return out;
+}
+
+/** Douglas–Peucker: drops path points that stray less than eps from a straight line. */
+function simplify(path, eps) {
+  if (path.length < 3) return path;
+  const keep = new Uint8Array(path.length);
+  keep[0] = keep[path.length - 1] = 1;
+  const stack = [[0, path.length - 1]];
+  while (stack.length) {
+    const [i0, i1] = stack.pop();
+    const a = path[i0], b = path[i1];
+    const ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey) || 1;
+    let worst = -1, wd = eps;
+    for (let k = i0 + 1; k < i1; k++) {
+      const d = Math.abs((path[k][0] - a[0]) * ey - (path[k][1] - a[1]) * ex) / l;
+      if (d > wd) {
+        wd = d;
+        worst = k;
+      }
+    }
+    if (worst > 0) {
+      keep[worst] = 1;
+      stack.push([i0, worst], [worst, i1]);
+    }
+  }
+  return path.filter((_, k) => keep[k]);
+}
+
+function dedupe(pts) {
+  const res = [];
+  for (const p of pts) {
+    const q = res[res.length - 1];
+    if (!q || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) > 0.5) res.push(p);
+  }
+  while (res.length > 2) {
+    const f = res[0], l = res[res.length - 1];
+    if (Math.abs(f[0] - l[0]) + Math.abs(f[1] - l[1]) > 0.5) break;
+    res.pop();
+  }
+  return res;
+}
+
+/**
+ * Splits a simple polygon along a path that starts and ends on its outline and runs inside it.
+ * Returns both halves (same winding as the original).
+ */
+function splitPoly(pts, path) {
+  const n = pts.length;
+  const E = path[0], X = path[path.length - 1];
+  const e = nearestEdge(pts, E[0], E[1]), x = nearestEdge(pts, X[0], X[1]);
+  // outline vertices met walking forward from point a to point b
+  const walk = (a, b) => {
+    const out = [];
+    if (a.i === b.i && b.t >= a.t) return out;
+    for (let k = (a.i + 1) % n; ; k = (k + 1) % n) {
+      out.push(pts[k]);
+      if (k === b.i) break;
+    }
+    return out;
+  };
+  const inner = path.slice(1, -1);
+  return [dedupe([E, ...walk(e, x), X, ...inner.slice().reverse()]), dedupe([X, ...walk(x, e), E, ...inner])];
+}
+
 /** Rounded rectangle as a polygon (separate top / bottom corner radii). */
 function blockPts(w, h, rTop, rBot, seg = 4) {
   const x = -w / 2, y = -h;
@@ -142,6 +245,74 @@ function blockPts(w, h, rTop, rBot, seg = 4) {
   }
   return pts;
 }
+
+/**
+ * Softens the corners of a convex polygon: each sharp vertex becomes a short curve that starts
+ * up to r(p) du away from it along both edges. Nearly straight vertices are left alone.
+ */
+function roundPoly(pts, r, seg = 5) {
+  const out = [];
+  for (let i = 0, n = pts.length; i < n; i++) {
+    const a = pts[(i - 1 + n) % n], p = pts[i], c = pts[(i + 1) % n];
+    const ux = a[0] - p[0], uy = a[1] - p[1], vx = c[0] - p[0], vy = c[1] - p[1];
+    const lu = Math.hypot(ux, uy), lv = Math.hypot(vx, vy);
+    const turn = Math.PI - Math.acos(G.clamp((ux * vx + uy * vy) / (lu * lv || 1), -1, 1));
+    const t = Math.min(r(p), lu * 0.45, lv * 0.45);
+    if (turn < 0.25 || t < 1) {
+      out.push(p);
+      continue;
+    }
+    const A = [p[0] + (ux / lu) * t, p[1] + (uy / lu) * t], B = [p[0] + (vx / lv) * t, p[1] + (vy / lv) * t];
+    for (let k = 0; k <= seg; k++) {
+      const s = k / seg, q = 1 - s;
+      out.push([q * q * A[0] + 2 * q * s * p[0] + s * s * B[0], q * q * A[1] + 2 * q * s * p[1] + s * s * B[1]]);
+    }
+  }
+  return out;
+}
+
+/** Points of an ellipse arc (angles in radians, y down). */
+function arc(cx, cy, rx, ry, a0, a1, n) {
+  const pts = [];
+  for (let k = 0; k <= n; k++) {
+    const a = a0 + ((a1 - a0) * k) / n;
+    pts.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]);
+  }
+  return pts;
+}
+
+/**
+ * Block outlines, all convex (the slicing and side-face drawing rely on it) with a flat bottom on
+ * the floor y = 0, top at y = -H, never wider than W. Corners: soft on top, tighter at the floor.
+ */
+const corners = (top, bot = 22) => (p) => (p[1] > -60 ? bot : top);
+const SHAPES = [
+  // loaf: the classic rounded brick
+  (W, H) => blockPts(W, H, 70, 22),
+  // castle: a sand-mold frustum
+  (W, H) => roundPoly([[-W / 2, 0], [-W * 0.31, -H], [W * 0.31, -H], [W / 2, 0]], corners(70)),
+  // dome: straight walls under a half-ellipse cap
+  (W, H) => roundPoly([[-W / 2, 0], ...arc(0, -H * 0.3, W / 2, H * 0.7, Math.PI, Math.PI * 2, 24), [W / 2, 0]], corners(70)),
+  // house: walls and a pitched roof
+  (W, H) => roundPoly([[-W / 2, 0], [-W / 2, -H * 0.55], [0, -H], [W / 2, -H * 0.55], [W / 2, 0]], corners(90)),
+  // hexagon standing on a flat side
+  (W, H) => {
+    W = Math.min(W, H * 1.35);
+    return roundPoly([[-W * 0.27, 0], [-W / 2, -H / 2], [-W * 0.27, -H], [W * 0.27, -H], [W / 2, -H / 2], [W * 0.27, 0]], corners(60));
+  },
+  // pyramid with a rounded tip
+  (W, H) => {
+    W = Math.min(W, H * 1.6);
+    return roundPoly([[-W / 2, 0], [0, -H], [W / 2, 0]], (p) => (p[1] < -H * 0.5 ? 220 : 22));
+  },
+  // ball, squashed flat where it sits
+  (W, H) => {
+    W = Math.min(W, H * 1.25);
+    const ry = H / 1.866, cy = -H + ry; // the floor cuts it where it's half as wide as its middle
+    const ring = arc(0, cy, W / 2, ry, 0, Math.PI * 2, 40).slice(0, -1);
+    return roundPoly(clipHalf(ring, 0, 0, 0, -1), corners(0, 30));
+  },
+];
 
 /** Small seeded PRNG so a texture re-rendered after a resize keeps its sparkles in place. */
 function rng(seed) {
@@ -168,6 +339,8 @@ export class SandToy extends Toy {
     this.buckets = new Map();
     this.darkCols = new Map();
     this.twinkles = [];
+    this.trails = [];
+    this.shapeIdx = -1;
     this.respawnT = 0;
     this.BW = 1200;
     this.TW = 1800;
@@ -185,6 +358,7 @@ export class SandToy extends Toy {
   }
   exit() {
     this.drags.clear();
+    this.trails.length = 0;
     this.scrape.stop();
   }
   setVariant() {
@@ -234,18 +408,26 @@ export class SandToy extends Toy {
     const aspect = a.w / Math.max(1, a.h);
     // a chunky block whatever the screen shape: wide screens get a longer loaf, tall ones a cube
     this.BW = Math.round(G.clamp((aspect * 1300 - 520) / 1.45, 760, 2300));
-    const pts = blockPts(this.BW, BH, 70, 22);
+    // a different shape from last time
+    let si = (Math.random() * SHAPES.length) | 0;
+    if (SHAPES.length > 1 && si === this.shapeIdx) si = (si + 1 + ((Math.random() * (SHAPES.length - 1)) | 0)) % SHAPES.length;
+    this.shapeIdx = si;
+    const pts = SHAPES[si](this.BW, BH);
+    let foot = 0; // half-width of the part standing on the floor
+    for (const p of pts) if (p[1] > -5) foot = Math.max(foot, Math.abs(p[0]));
     const tex = this.makeTex(this.BW);
-    this.block = { pts, tex, area0: Math.abs(polyArea(pts)), ty: 0, vy: 0, sx: 1, sy: 1, squash: 0, landed: true };
+    this.block = { pts, tex, foot, area0: Math.abs(polyArea(pts)), ty: 0, vy: 0, sx: 1, sy: 1, squash: 0, landed: true };
     this.layout();
     if (drop) {
       this.block.landed = false;
       this.block.ty = -(this.oy / this.S) - 60;
     }
     this.twinkles.length = 0;
+    this.trails.length = 0;
     for (const d of this.drags.values()) {
       d.inside = false;
       d.entry = null;
+      d.trail = null;
     }
   }
 
@@ -394,10 +576,11 @@ export class SandToy extends Toy {
   // ---------------------------------------------------------------- input
   pointerDown(p) {
     const [ux, uy] = this.toDu(p.x, p.y);
-    const d = { id: p.id, x: p.x, y: p.y, ux, uy, inside: false, entry: null, ang: Math.PI / 2, tang: Math.PI / 2, alpha: 0, moved: 0, speed: 0, crumbT: 0, up: false, dirX: 0, dirY: 1 };
+    const d = { id: p.id, x: p.x, y: p.y, ux, uy, inside: false, entry: null, trail: null, moved: 0, speed: 0, crumbT: 0, up: false, dirX: 0, dirY: 1 };
     if (this.canCut() && inPoly(this.block.pts, ux, uy)) {
       d.inside = true;
       d.entry = [ux, uy];
+      this.startTrail(d, ux, uy);
     }
     this.drags.set(p.id, d);
   }
@@ -409,7 +592,6 @@ export class SandToy extends Toy {
     const len = Math.hypot(dx, dy);
     if (len < 0.5) return;
     if (len > 2) {
-      d.tang = Math.atan2(dy, dx);
       d.dirX = dx / len;
       d.dirY = dy / len;
     }
@@ -428,6 +610,25 @@ export class SandToy extends Toy {
     d.up = true;
     d.inside = false;
     d.entry = null;
+    this.endTrail(d);
+  }
+
+  // ---------------------------------------------------------------- cut trails
+  /** The groove a finger leaves while it is inside the block (block coords). */
+  startTrail(d, x, y) {
+    this.endTrail(d);
+    d.trail = { pts: [[x, y]], a: 1, live: true };
+    this.trails.push(d.trail);
+  }
+  extendTrail(d, x, y, force) {
+    const t = d.trail;
+    if (!t) return;
+    const q = t.pts[t.pts.length - 1];
+    if (force || Math.abs(x - q[0]) + Math.abs(y - q[1]) > 6) t.pts.push([x, y]);
+  }
+  endTrail(d) {
+    if (d.trail) d.trail.live = false;
+    d.trail = null;
   }
 
   keyDown(e) {
@@ -455,7 +656,7 @@ export class SandToy extends Toy {
     const x = (side > 0 ? x1 : x0) - side * (x1 - x0) * G.rand(0.12, 0.28);
     const tilt = G.rand(-90, 90);
     const hits = segHits(pts, x - tilt, -BH * 1.3, x + tilt, 200);
-    if (hits.length >= 2) this.tryCut([hits[0].x, hits[0].y], [hits[hits.length - 1].x, hits[hits.length - 1].y], { dirX: 0, dirY: 1, x: this.ox + x * this.S, y: this.oy - BH * 0.5 * this.S });
+    if (hits.length >= 2) this.tryCut([[hits[0].x, hits[0].y], [hits[1].x, hits[1].y]], { dirX: 0, dirY: 1, x: this.ox + x * this.S, y: this.oy - BH * 0.5 * this.S });
   }
 
   /** Follows one pointer segment through the block: entering then leaving it makes a cut. */
@@ -463,6 +664,7 @@ export class SandToy extends Toy {
     if (!this.canCut()) {
       d.inside = false;
       d.entry = null;
+      this.endTrail(d);
       return;
     }
     const hits = segHits(this.block.pts, ax, ay, bx, by);
@@ -470,33 +672,58 @@ export class SandToy extends Toy {
       if (!d.inside) {
         d.inside = true;
         d.entry = [h.x, h.y];
+        this.startTrail(d, h.x, h.y);
       } else {
         d.inside = false;
         const entry = d.entry;
         d.entry = null;
-        if (entry && this.tryCut(entry, [h.x, h.y], d)) {
+        this.extendTrail(d, h.x, h.y, true);
+        const path = d.trail ? d.trail.pts.slice() : entry ? [entry, [h.x, h.y]] : null;
+        this.endTrail(d);
+        if (path && this.tryCut(path, d)) {
           // the outline changed under every finger: restart their tracking from where they are
           for (const o of this.drags.values()) {
-            const inside = !o.up && this.canCut() && inPoly(this.block.pts, o === d ? bx : o.ux, o === d ? by : o.uy);
+            const ox = o === d ? bx : o.ux, oy = o === d ? by : o.uy;
+            const inside = !o.up && this.canCut() && inPoly(this.block.pts, ox, oy);
             o.inside = inside;
-            o.entry = inside ? (o === d ? [bx, by] : [o.ux, o.uy]) : null;
+            o.entry = inside ? [ox, oy] : null;
+            if (inside) this.startTrail(o, ox, oy);
+            else this.endTrail(o);
           }
           return;
         }
       }
     }
+    if (d.inside) this.extendTrail(d, bx, by);
   }
 
-  /** Slices the block along the line E→X. The piece on the floor (the bigger one if both are) stays. */
-  tryCut(E, X, d) {
+  /**
+   * Slices the block along the path the finger took (curves and all), from where it went in to
+   * where it came out. The piece on the floor (the bigger one if both are) stays.
+   */
+  tryCut(path, d) {
     const b = this.block, app = this.app;
-    const lx = X[0] - E[0], ly = X[1] - E[1];
-    const len = Math.hypot(lx, ly);
-    if (len < 40) return false;
-    const nx = -ly / len, ny = lx / len;
-    const A = clipHalf(b.pts, E[0], E[1], nx, ny);
-    const B = clipHalf(b.pts, E[0], E[1], -nx, -ny);
-    if (A.length < 3 || B.length < 3) return false;
+    path = untangle(simplify(dedupe(path), 2.5));
+    if (path.length < 2) return false;
+    // a swipe that started inside the block: run its first stretch back out to the outline
+    const s0 = path[0], s1 = path[1];
+    if (nearestEdge(b.pts, s0[0], s0[1]).d > 1) {
+      const dx = s0[0] - s1[0], dy = s0[1] - s1[1], dl = Math.hypot(dx, dy) || 1;
+      const back = segHits(b.pts, s0[0], s0[1], s0[0] + (dx / dl) * 1e4, s0[1] + (dy / dl) * 1e4);
+      if (!back.length) return false;
+      path = untangle([[back[0].x, back[0].y], ...path]);
+    }
+    const E = path[0], X = path[path.length - 1];
+    let plen = 0;
+    for (let k = 1; k < path.length; k++) plen += Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]);
+    if (plen < 40) return false;
+    const area = Math.abs(polyArea(b.pts));
+    const valid = ([P, Q]) => P.length >= 3 && Q.length >= 3 && Math.abs(Math.abs(polyArea(P)) + Math.abs(polyArea(Q)) - area) < area * 0.01;
+    // if the path strayed outside (it can graze a hollow), fall back to a straight slice
+    let halves = splitPoly(b.pts, path);
+    if (!valid(halves)) halves = splitPoly(b.pts, [E, X]);
+    if (!valid(halves)) return false;
+    const [A, B] = halves;
     const aA = Math.abs(polyArea(A)), aB = Math.abs(polyArea(B));
     if (Math.min(aA, aB) < b.area0 * 0.004) return false; // just a nick
     const floorA = Math.max(...A.map((p) => p[1])) > -3;
@@ -516,8 +743,8 @@ export class SandToy extends Toy {
 
     // crumbs shaken loose along the cut
     for (let i = 0; i < 14; i++) {
-      const t = Math.random();
-      const x = E[0] + lx * t, y = E[1] + ly * t;
+      const k = (Math.random() * (path.length - 1)) | 0, t = Math.random();
+      const x = path[k][0] + (path[k + 1][0] - path[k][0]) * t, y = path[k][1] + (path[k + 1][1] - path[k][1]) * t;
       const li = this.layerAt(b.tex, x, y);
       this.addGrain(x, y, G.rand(-90, 90), G.rand(-160, 0), this.grainColor(b.tex, li), Math.random() < 0.25);
     }
@@ -723,7 +950,7 @@ export class SandToy extends Toy {
         app.haptic(20);
         const by = this.oy;
         for (const side of [-1, 1]) {
-          app.fx.burst(this.ox + side * this.BW * 0.5 * this.S, by, { count: 8, colors: ['rgba(255,255,255,0.75)', G.shade(b.tex.pal[NL - 1], 0.4)], shape: 'circle', speed: [40, 160], angle: side > 0 ? -0.3 : Math.PI + 0.3, spread: 1.4, size: [2, 5], gravity: 120, life: [0.3, 0.6], drag: 0.85 });
+          app.fx.burst(this.ox + side * b.foot * this.S, by, { count: 8, colors: ['rgba(255,255,255,0.75)', G.shade(b.tex.pal[NL - 1], 0.4)], shape: 'circle', speed: [40, 160], angle: side > 0 ? -0.3 : Math.PI + 0.3, spread: 1.4, size: [2, 5], gravity: 120, life: [0.3, 0.6], drag: 0.85 });
         }
       }
     }
@@ -745,9 +972,7 @@ export class SandToy extends Toy {
     for (const [id, d] of this.drags) {
       d.speed = G.damp(d.speed, d.moved / Math.max(dt, 1e-3), 10, dt);
       d.moved = 0;
-      d.ang += G.angleDiff(d.ang, d.tang) * (1 - Math.exp(-14 * dt));
-      d.alpha = d.up ? Math.max(0, d.alpha - dt / 0.18) : Math.min(1, d.alpha + dt / 0.08);
-      if (d.up && d.alpha <= 0) {
+      if (d.up) {
         this.drags.delete(id);
         continue;
       }
@@ -768,6 +993,14 @@ export class SandToy extends Toy {
     }
     this.scrape.set({ vol, freq });
     if (cutting) app.addProgress(0.2 * dt, cutting.x, cutting.y);
+
+    // finished grooves fade out
+    let j = 0;
+    for (const t of this.trails) {
+      if (!t.live) t.a -= dt / 0.35;
+      if (t.a > 0) this.trails[j++] = t;
+    }
+    this.trails.length = j;
 
     this.updatePieces(dt);
     this.updateGrains(dt);
@@ -1126,122 +1359,38 @@ export class SandToy extends Toy {
     ctx.globalAlpha = 1;
   }
 
-  /**
-   * While a finger is inside the block: the groove it has carved so far (entry → knife) and a
-   * dashed guide showing where the slice will come out if the swipe keeps going straight.
-   */
-  drawCutLines(ctx, m) {
+  /** The grooves fingers have carved through the block, along the exact path they took. */
+  drawTrails(ctx, m) {
+    if (!this.trails.length) return;
     const b = this.block, S = this.S;
     const toScreen = (x, y) => [this.ox + (m[0] * x + m[2] * y + m[4]) * S, this.oy + (m[1] * x + m[3] * y + m[5]) * S];
-    let clipped = false;
-    for (const d of this.drags.values()) {
-      if (d.up || !d.inside || !d.entry || !this.canCut()) continue;
-      const [ex, ey] = d.entry;
-      const lx = d.ux - ex, ly = d.uy - ey, len = Math.hypot(lx, ly);
-      if (len < 6) continue;
-      const far = 6000;
-      const hits = segHits(b.pts, ex, ey, ex + (lx / len) * far, ey + (ly / len) * far);
-      const exit = hits.length && hits[hits.length - 1].t * far > len ? hits[hits.length - 1] : null;
-      if (!clipped) {
-        clipped = true;
-        ctx.save();
-        ctx.beginPath();
-        b.pts.forEach((p, i) => (i ? ctx.lineTo : ctx.moveTo).apply(ctx, toScreen(p[0], p[1])));
-        ctx.closePath();
-        ctx.clip();
-        ctx.lineCap = 'round';
-      }
-      const A = toScreen(ex, ey), K = toScreen(d.ux, d.uy);
-      if (exit) {
-        const X = toScreen(exit.x, exit.y);
-        const lw = Math.max(2, 9 * S);
-        ctx.setLineDash([Math.max(5, 26 * S), Math.max(5, 22 * S)]);
-        ctx.beginPath();
-        ctx.moveTo(K[0], K[1]);
-        ctx.lineTo(X[0], X[1]);
-        // a faint dark outline keeps the white dashes readable on pale layers
-        ctx.lineWidth = lw + Math.max(1.5, 5 * S);
-        ctx.strokeStyle = 'rgba(40,20,0,0.18)';
-        ctx.stroke();
-        ctx.lineWidth = lw;
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      // the carved groove: a dark slot with a lit lower lip
-      const w = Math.max(3, 16 * S);
+    const path = (pts, dy) => {
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const [x, y] = toScreen(p[0], p[1]);
+        i ? ctx.lineTo(x, y + dy) : ctx.moveTo(x, y + dy);
+      });
+    };
+    ctx.save();
+    path(b.pts, 0);
+    ctx.closePath();
+    ctx.clip();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const w = Math.max(3, 18 * S);
+    for (const t of this.trails) {
+      if (t.pts.length < 2) continue;
+      ctx.globalAlpha = t.a;
+      // a dark slot with a lit lower lip
+      path(t.pts, 0);
       ctx.lineWidth = w;
-      ctx.strokeStyle = 'rgba(60,25,0,0.32)';
-      ctx.beginPath();
-      ctx.moveTo(A[0], A[1]);
-      ctx.lineTo(K[0], K[1]);
+      ctx.strokeStyle = 'rgba(60,25,0,0.38)';
       ctx.stroke();
+      path(t.pts, w * 0.45);
       ctx.lineWidth = Math.max(1, w * 0.3);
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.beginPath();
-      ctx.moveTo(A[0], A[1] + w * 0.45);
-      ctx.lineTo(K[0], K[1] + w * 0.45);
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)';
       ctx.stroke();
     }
-    if (clipped) ctx.restore();
-  }
-
-  drawKnife(ctx, d, color) {
-    const L = G.clamp(BH * this.S * 0.42, 46, 190);
-    ctx.save();
-    ctx.globalAlpha = d.alpha;
-    ctx.translate(d.x, d.y);
-    ctx.rotate(d.ang);
-    if (Math.cos(d.ang) < -0.05) ctx.scale(1, -1); // keep the spine on top
-    ctx.translate(-0.8 * L, 0);
-    // soft drop shadow
-    ctx.save();
-    ctx.translate(L * 0.04, L * 0.07);
-    ctx.fillStyle = 'rgba(0,0,0,0.14)';
-    G.roundRect(ctx, -0.92 * L, -0.13 * L, 1.9 * L, 0.26 * L, 0.13 * L);
-    ctx.fill();
-    ctx.restore();
-    // blade
-    ctx.beginPath();
-    ctx.moveTo(0, -0.13 * L);
-    ctx.lineTo(0.7 * L, -0.13 * L);
-    ctx.quadraticCurveTo(0.98 * L, -0.12 * L, 1.04 * L, -0.01 * L);
-    ctx.quadraticCurveTo(0.86 * L, 0.11 * L, 0.2 * L, 0.11 * L);
-    ctx.lineTo(0, 0.11 * L);
-    ctx.closePath();
-    const bg = ctx.createLinearGradient(0, -0.13 * L, 0, 0.11 * L);
-    bg.addColorStop(0, '#ffffff');
-    bg.addColorStop(0.55, '#eef2f6');
-    bg.addColorStop(1, '#bcc7d2');
-    ctx.fillStyle = bg;
-    ctx.fill();
-    ctx.lineWidth = Math.max(1, L * 0.012);
-    ctx.strokeStyle = 'rgba(70,90,110,0.35)';
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0.06 * L, 0.055 * L);
-    ctx.quadraticCurveTo(0.78 * L, 0.06 * L, 0.97 * L, 0.0);
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = Math.max(1, L * 0.018);
-    ctx.stroke();
-    // bolster + handle
-    G.roundRect(ctx, -0.08 * L, -0.17 * L, 0.11 * L, 0.34 * L, 0.045 * L);
-    ctx.fillStyle = G.shade(color, -0.18);
-    ctx.fill();
-    G.roundRect(ctx, -0.95 * L, -0.135 * L, 0.89 * L, 0.27 * L, 0.135 * L);
-    const hg = ctx.createLinearGradient(0, -0.135 * L, 0, 0.135 * L);
-    hg.addColorStop(0, G.shade(color, 0.4));
-    hg.addColorStop(0.45, color);
-    hg.addColorStop(1, G.shade(color, -0.25));
-    ctx.fillStyle = hg;
-    ctx.fill();
-    ctx.fillStyle = G.shade(color, -0.4);
-    ctx.beginPath();
-    ctx.ellipse(-0.8 * L, 0, 0.055 * L, 0.04 * L, 0, 0, G.TAU);
-    ctx.fill();
-    G.roundRect(ctx, -0.7 * L, -0.1 * L, 0.55 * L, 0.06 * L, 0.03 * L);
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fill();
     ctx.restore();
   }
 
@@ -1274,10 +1423,9 @@ export class SandToy extends Toy {
     for (const [p, m] of behind) this.drawPrism(ctx, p.pts, p.tex, m);
     this.drawPrism(ctx, b.pts, b.tex, bm);
     this.drawTwinkles(ctx, bm);
-    this.drawCutLines(ctx, bm);
+    this.drawTrails(ctx, bm);
     for (const [p, m] of front) this.drawPrism(ctx, p.pts, p.tex, m);
     this.drawGrains(ctx);
-    for (const d of this.drags.values()) if (d.alpha > 0) this.drawKnife(ctx, d, st.knife);
   }
 
   hud() {

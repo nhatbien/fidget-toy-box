@@ -1,7 +1,7 @@
 // Names, hints and style colors for every toy, in one place.
 // Languages: en, vi, es, pt, fr, de, id, it, tr, ru.
 
-export const VARIANT_COSTS = [0, 10, 25, 45, 70, 100];
+export const VARIANT_COSTS = [0, 5, 12, 20, 30, 45];
 
 const L = (en, vi, es, pt, fr, de, id, it, tr, ru) => ({ en, vi, es, pt, fr, de, id, it, tr, ru });
 

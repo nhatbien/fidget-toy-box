@@ -4,9 +4,6 @@
 window.captureShots = async function captureShots(tag = 'shot') {
   const app = window.__app;
   const backup = JSON.stringify(app.data);
-  const autoUnlock = app.checkAutoUnlock;
-  app.checkAutoUnlock = () => {};
-  app.celebration = null;
   const ev = (id, x, y) => ({ pointerId: id, clientX: x, clientY: y, pointerType: 'touch', button: 0 });
   const key = (k) => app.onKey({ key: k, repeat: false, preventDefault() {} });
   const step = (n = 1) => { for (let i = 0; i < n; i++) app.update(1 / 60); app.render(); };
@@ -119,7 +116,6 @@ window.captureShots = async function captureShots(tag = 'shot') {
 
   app.goHome();
   step(40);
-  app.checkAutoUnlock = autoUnlock;
   app.applySave(backup);
   app.saveNow();
   return 'done';

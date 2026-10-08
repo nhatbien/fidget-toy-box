@@ -5,9 +5,6 @@ window.runSmokeTest = async function runSmokeTest({ frames = 120 } = {}) {
   const app = window.__app;
   const { TOYS } = await import('../src/toys/index.js');
   const backup = JSON.stringify(app.data);
-  const autoUnlock = app.checkAutoUnlock;
-  app.checkAutoUnlock = () => {}; // random taps would hit the celebration card
-  app.celebration = null;
   const errors = [];
   const origError = console.error;
   console.error = (...a) => { errors.push(a.map(String).join(' ').slice(0, 300)); origError(...a); };
@@ -66,7 +63,6 @@ window.runSmokeTest = async function runSmokeTest({ frames = 120 } = {}) {
     report[id] = { errors: app._errors - t0, avgMs: +(total / n).toFixed(2), worstMs: +worst.toFixed(1) };
   }
   console.error = origError;
-  app.checkAutoUnlock = autoUnlock;
   app.data = JSON.parse(backup);
   app.applySave(backup);
   app.saveNow();

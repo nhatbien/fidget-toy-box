@@ -61,8 +61,6 @@ export class App {
     this.ready = false;
     this.modal = null;
     this.toast = null;
-    this.celebration = null;
-    this._autoT = 0;
     this.flying = [];
     this.starBump = 0;
     this.starPos = { x: 30, y: 30 };
@@ -365,103 +363,6 @@ export class App {
     if (ok && this.toyId === id) this.unlockVariant(i, 'ad');
     else if (!ok) this.showToast(this.t('noAd'));
   }
-  /** First locked style of a toy (styles unlock in order), or -1 when all are open. */
-  nextLocked(T) {
-    for (let i = 1; i < T.variants.length; i++) if (!this.isUnlocked(T.id, i)) return i;
-    return -1;
-  }
-  /**
-   * Automatic unlocks: as soon as the player can afford the next style it is bought and celebrated.
-   * Inside a toy we save up for that toy's next style; on the shelf (or once the current toy is
-   * complete) the cheapest next style of any toy is picked.
-   */
-  checkAutoUnlock() {
-    if (this.celebration || this.modal || this.trans || this.flying.length) return;
-    let pick = null;
-    const cur = this.scene === this.toy && this.toy ? this.toy.constructor : null;
-    if (cur && this.nextLocked(cur) > 0) {
-      const i = this.nextLocked(cur);
-      if (this.data.stars >= cur.variants[i].cost) pick = { T: cur, i };
-    } else {
-      for (const T of TOYS) {
-        const i = this.nextLocked(T);
-        if (i > 0 && this.data.stars >= T.variants[i].cost && (!pick || T.variants[i].cost < pick.T.variants[pick.i].cost)) pick = { T, i };
-      }
-    }
-    if (!pick) return;
-    const { T, i } = pick;
-    this.data.stars -= T.variants[i].cost;
-    const list = this.data.unlocked[T.id] || (this.data.unlocked[T.id] = []);
-    if (!list.includes(i)) list.push(i);
-    this.celebration = { T, i, t: 0, life: 6 };
-    this.audio.fanfare();
-    this.haptic(40);
-    this.fx.burst(this.w / 2, this.h * 0.2, { count: 60, colors: G.RAINBOW, shape: ['confetti', 'star'], speed: [200, 520], gravity: 650, size: [4, 9], life: [1, 1.8] });
-    const { have, all } = this.countUnlocks();
-    if (have === all) this.showToast(this.t('allUnlocked'), 4);
-    this.saveNow();
-  }
-  /** Instance used to draw style previews of toys that are not open. */
-  toyInstance(T) {
-    let toy = this.toyCache.get(T.id);
-    if (!toy) {
-      toy = new T(this);
-      this.toyCache.set(T.id, toy);
-    }
-    return toy;
-  }
-  /** Tapping the celebration card: switch to the new style (opening its toy if needed). */
-  tryCelebrated() {
-    const c = this.celebration;
-    if (!c) return;
-    this.celebration = null;
-    if (this.toy && this.toy.constructor === c.T) this.pickVariant(c.i);
-    else {
-      this.data.sel[c.T.id] = c.i;
-      if (this.scene === this.toy) this.goHome();
-      else this.openToy(c.T.id);
-    }
-  }
-  celebrationRect() {
-    const w = Math.min(this.w - 24, 380), h = G.clamp(this.btn * 1.5, 70, 96);
-    const c = this.celebration;
-    const k = c ? G.ease.outBack(G.clamp(c.t / 0.4, 0, 1)) * G.clamp((c.life - c.t) / 0.35, 0, 1) : 0;
-    const top = this.scene === this.toy && !this.wide ? this.area.y : this.pad;
-    return { x: (this.w - w) / 2, y: G.lerp(-h - 10, top, k), w, h };
-  }
-  drawCelebration(ctx) {
-    const c = this.celebration;
-    if (!c) return;
-    const R = this.celebrationRect();
-    const r = R.h * 0.36;
-    ctx.save();
-    G.roundRect(ctx, R.x, R.y + 5, R.w, R.h, R.h * 0.3);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fill();
-    G.roundRect(ctx, R.x, R.y, R.w, R.h, R.h * 0.3);
-    ctx.fillStyle = '#fff7ea';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = `hsl(${(this.time * 120) % 360},90%,62%)`;
-    ctx.stroke();
-    const px = R.x + R.h * 0.55, py = R.y + R.h / 2;
-    G.circle(ctx, px, py, r + 4);
-    ctx.fillStyle = '#ffd23f';
-    ctx.fill();
-    G.circle(ctx, px, py, r);
-    ctx.fillStyle = '#2b1a10';
-    ctx.fill();
-    ctx.save();
-    G.circle(ctx, px, py, r);
-    ctx.clip();
-    this.guard(() => this.toyInstance(c.T).drawVariantIcon(ctx, c.i, px, py, r));
-    ctx.restore();
-    const tx = R.x + R.h * 1.05, tw = R.w - R.h * 1.2;
-    const fs = R.h * 0.24;
-    G.drawText(ctx, `${this.t('unlocked')} · ${this.tr(c.T.title)}`, tx, py - fs * 0.62, { size: fs, color: '#5a3416', align: 'left', maxWidth: tw });
-    G.drawText(ctx, this.t('tapToTry'), tx, py + fs * 0.72, { size: fs * 0.8, weight: 700, color: '#b07a45', align: 'left', maxWidth: tw });
-    ctx.restore();
-  }
   async maybeInterstitial() {
     if (!platform.isYouTube || this.time < 120 || this.time - this.lastAdAt < AD_INTERVAL) return;
     this.lastAdAt = this.time;
@@ -627,14 +528,6 @@ export class App {
     return [this.homeBtn, ...(this.toy ? this.toy.buttons : []), ...this.chips];
   }
   hitUi(p) {
-    if (this.celebration) {
-      const R = this.celebrationRect();
-      if (p.x >= R.x && p.x <= R.x + R.w && p.y >= R.y && p.y <= R.y + R.h) {
-        if (!this._celebBtn) this._celebBtn = { kind: 'celebration', x: 0, y: 0, r: 0, onTap: () => this.tryCelebrated() };
-        Object.assign(this._celebBtn, { x: R.x + R.w / 2, y: R.y + R.h / 2, r: Math.max(R.w, R.h) });
-        return this._celebBtn;
-      }
-    }
     if (this.scene === this.toy && this.toy) {
       for (const b of this.toyUiButtons()) if (b.x !== undefined && hitCircle(b, p, b.kind === 'chip' ? 3 : 6)) return b;
       const sp = this.starPillRect;
@@ -813,15 +706,6 @@ export class App {
       if (this.toast.t > this.toast.life) this.toast = null;
     }
     if (this.hintT > 0) this.hintT -= dt;
-    if (this.celebration) {
-      this.celebration.t += dt;
-      if (this.celebration.t >= this.celebration.life) this.celebration = null;
-    }
-    this._autoT += dt;
-    if (this._autoT > 0.4 && this.ready) {
-      this._autoT = 0;
-      this.checkAutoUnlock();
-    }
     if (this.modal && !this.modal.update(dt)) this.modal = null;
     if (this.trans) {
       const tr = this.trans;
@@ -850,7 +734,6 @@ export class App {
     this.fx.draw(ctx);
     this.drawFlying(ctx);
     this.drawToast(ctx);
-    this.drawCelebration(ctx);
     if (this.modal) this.modal.draw(ctx);
     if (this.trans) {
       const tr = this.trans;

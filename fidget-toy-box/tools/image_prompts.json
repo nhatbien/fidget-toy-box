@@ -1,0 +1,115 @@
+{
+  "style_icon": "Art style: premium casual mobile game asset, glossy stylized 3D render, smooth soft-touch plastic, silicone and rubber materials, soft studio lighting from the top-left with crisp specular highlights, vibrant saturated candy colors, clean rounded shapes, cute and satisfying. Camera: slight three-quarter top-down view. Composition: a single object, perfectly centered, filling about 80% of the square frame with even padding on all sides. Background: fully transparent (real alpha channel). No floor, no cast shadow, no backdrop, no text, no letters, no numbers, no logos, no watermark, no border.",
+  "batches": {
+    "A": [
+      {
+        "name": "thumb_popit",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A round rainbow silicone pop-it fidget toy: concentric rings of raised round bubbles colored red, orange, yellow, green, blue and purple."
+      },
+      {
+        "name": "thumb_spinner",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A three-lobed fidget spinner made of glossy turquoise plastic with shiny chrome ball-bearing caps in each lobe and in the center."
+      },
+      {
+        "name": "thumb_bubblewrap",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A square sheet of clear, slightly blue-tinted bubble wrap with neat rows of shiny round air bubbles; two bubbles are popped flat; one corner gently curls up."
+      },
+      {
+        "name": "thumb_slime",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A jiggly glossy blob of pastel pink and lavender slime with tiny glitter sparkles, soft wobbly shape as if it was just squished by a finger."
+      }
+    ],
+    "B": [
+      {
+        "name": "thumb_switches",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A chunky toy switch board (busy board): a rounded rectangular mint-green panel with three colorful toggle switches, a big round red push button, a yellow rotary knob and a few small glowing LED lights."
+      },
+      {
+        "name": "thumb_xylophone",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A rainbow toy xylophone with eight colored bars from red to purple, decreasing in length, on a light wooden frame, with two wooden mallets with round red heads resting on top."
+      },
+      {
+        "name": "thumb_sand",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A neat rectangular block of kinetic sand made of soft pastel rainbow layers (pink, peach, yellow, mint, sky blue, lavender) with fine sand grain texture, and one thin slice falling away after being cut by a small plastic toy knife."
+      },
+      {
+        "name": "thumb_balloons",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A cheerful bunch of three shiny latex party balloons (red, yellow and blue) with curly ribbons, floating."
+      }
+    ],
+    "C": [
+      {
+        "name": "thumb_drums",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A toy beat machine (drum pad controller): a rounded dark grey device with a 3x3 grid of square rubber pads glowing in different neon colors (pink, orange, yellow, green, cyan, blue, purple)."
+      },
+      {
+        "name": "thumb_spinart",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A spin-art toy: a round white paper disc on a small spinning turntable, covered in vibrant swirling paint splatter (magenta, cyan, yellow, lime green), with two small squeeze paint bottles beside it."
+      },
+      {
+        "name": "thumb_zen",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A miniature Japanese zen sand garden in a square light-wood tray: smooth beige sand raked into flowing wave and circle patterns, three smooth grey pebbles, and a tiny bamboo rake."
+      },
+      {
+        "name": "thumb_cradle",
+        "size": "1024x1024",
+        "transparent": true,
+        "prompt": "A Newton's cradle desk toy: five shiny chrome steel balls hanging in a row by thin strings from a sleek rounded frame painted soft coral pink, with the leftmost ball lifted mid-swing."
+      }
+    ],
+    "D": [
+      {
+        "name": "bg_wood",
+        "size": "1024x1024",
+        "transparent": false,
+        "prompt": "Seamless tileable texture of a warm honey-brown wooden wall made of vertical planks with subtle natural grain and a few soft knots. Evenly lit, flat front-facing orthographic view, no perspective, no objects, no shadows, no vignette, no text. The left/right and top/bottom edges must tile seamlessly."
+      },
+      {
+        "name": "logo",
+        "size": "1536x1024",
+        "transparent": true,
+        "prompt": "Game title logo that reads exactly FIDGET TOY BOX (spelled F-I-D-G-E-T, then T-O-Y, then B-O-X), stacked in two lines: FIDGET on the top line and TOY BOX on the bottom line. Chunky rounded bubbly 3D letters, each letter a different candy color (red, orange, yellow, green, blue, purple), glossy highlights, thick white outline plus a dark chocolate-brown outer outline, playful slight bounce. Centered. Fully transparent background (real alpha channel), nothing else in the image, no other text."
+      },
+      {
+        "name": "icon",
+        "size": "1024x1024",
+        "transparent": false,
+        "prompt": "Square app icon for a relaxing fidget toys game: an open wooden toy box overflowing with glossy 3D fidget toys (a rainbow pop-it, a turquoise fidget spinner, a pink slime blob and a few party balloons) on a warm soft orange-to-yellow radial gradient background with gentle sparkles. Bold shapes, very readable at small sizes, glossy stylized 3D render. No text, no letters, no logos. IMPORTANT: show ONLY these exact toys and nothing else: no slinky, no spring, no cubes, no spiky balls, no rubber balls, no other toys, no plants."
+      },
+      {
+        "name": "cover_land",
+        "size": "1536x1024",
+        "transparent": false,
+        "prompt": "Wide promotional key art for a relaxing fidget toys game: a cozy warm wooden toy shelf with three shelves filled with glossy colorful 3D fidget toys (rainbow pop-it, turquoise fidget spinner, pink slime blob, bubble wrap, rainbow xylophone, party balloons, Newton's cradle, pastel kinetic sand block, mini zen garden, toy switch board), soft warm lighting, joyful and relaxing mood, glossy stylized 3D render. Keep the upper-center third of the image calm and less busy (soft wood wall) so a title can be placed there later. No text, no letters, no logos, no watermark. IMPORTANT: show ONLY these exact toys and nothing else: no slinky, no spring, no cubes, no spiky balls, no rubber balls, no other toys, no plants."
+      },
+      {
+        "name": "cover_port",
+        "size": "1024x1536",
+        "transparent": false,
+        "prompt": "Tall portrait promotional key art for a relaxing fidget toys game: a cozy warm wooden toy shelf with four shelves filled with glossy colorful 3D fidget toys (rainbow pop-it, turquoise fidget spinner, pink slime blob, bubble wrap, rainbow xylophone, party balloons, Newton's cradle, pastel kinetic sand block, mini zen garden, toy switch board), soft warm lighting, joyful and relaxing mood, glossy stylized 3D render. Keep the top quarter of the image calm and less busy (soft wood wall) so a title can be placed there later. No text, no letters, no logos, no watermark. IMPORTANT: show ONLY these exact toys and nothing else: no slinky, no spring, no cubes, no spiky balls, no rubber balls, no other toys, no plants."
+      }
+    ]
+  }
+}

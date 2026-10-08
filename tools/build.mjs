@@ -58,6 +58,8 @@ for (const target of TARGETS) {
   fs.writeFileSync(path.join(out, 'index.html'), page);
   fs.writeFileSync(path.join(out, 'game.js'), js);
   copyDir(path.join(ROOT, 'assets'), path.join(out, 'assets'));
+  // Store pages (privacy policy, support) only belong on the public website.
+  if (target === 'web') for (const f of ['privacy.html', 'support.html']) fs.copyFileSync(path.join(ROOT, f), path.join(out, f));
 
   // Playables rules: only relative paths, safe file names, files < 30 MiB (ideally < 512 KiB).
   const files = walk(out);

@@ -1126,6 +1126,66 @@ export class SandToy extends Toy {
     ctx.globalAlpha = 1;
   }
 
+  /**
+   * While a finger is inside the block: the groove it has carved so far (entry → knife) and a
+   * dashed guide showing where the slice will come out if the swipe keeps going straight.
+   */
+  drawCutLines(ctx, m) {
+    const b = this.block, S = this.S;
+    const toScreen = (x, y) => [this.ox + (m[0] * x + m[2] * y + m[4]) * S, this.oy + (m[1] * x + m[3] * y + m[5]) * S];
+    let clipped = false;
+    for (const d of this.drags.values()) {
+      if (d.up || !d.inside || !d.entry || !this.canCut()) continue;
+      const [ex, ey] = d.entry;
+      const lx = d.ux - ex, ly = d.uy - ey, len = Math.hypot(lx, ly);
+      if (len < 6) continue;
+      const far = 6000;
+      const hits = segHits(b.pts, ex, ey, ex + (lx / len) * far, ey + (ly / len) * far);
+      const exit = hits.length && hits[hits.length - 1].t * far > len ? hits[hits.length - 1] : null;
+      if (!clipped) {
+        clipped = true;
+        ctx.save();
+        ctx.beginPath();
+        b.pts.forEach((p, i) => (i ? ctx.lineTo : ctx.moveTo).apply(ctx, toScreen(p[0], p[1])));
+        ctx.closePath();
+        ctx.clip();
+        ctx.lineCap = 'round';
+      }
+      const A = toScreen(ex, ey), K = toScreen(d.ux, d.uy);
+      if (exit) {
+        const X = toScreen(exit.x, exit.y);
+        const lw = Math.max(2, 9 * S);
+        ctx.setLineDash([Math.max(5, 26 * S), Math.max(5, 22 * S)]);
+        ctx.beginPath();
+        ctx.moveTo(K[0], K[1]);
+        ctx.lineTo(X[0], X[1]);
+        // a faint dark outline keeps the white dashes readable on pale layers
+        ctx.lineWidth = lw + Math.max(1.5, 5 * S);
+        ctx.strokeStyle = 'rgba(40,20,0,0.18)';
+        ctx.stroke();
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      // the carved groove: a dark slot with a lit lower lip
+      const w = Math.max(3, 16 * S);
+      ctx.lineWidth = w;
+      ctx.strokeStyle = 'rgba(60,25,0,0.32)';
+      ctx.beginPath();
+      ctx.moveTo(A[0], A[1]);
+      ctx.lineTo(K[0], K[1]);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1, w * 0.3);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      ctx.moveTo(A[0], A[1] + w * 0.45);
+      ctx.lineTo(K[0], K[1] + w * 0.45);
+      ctx.stroke();
+    }
+    if (clipped) ctx.restore();
+  }
+
   drawKnife(ctx, d, color) {
     const L = G.clamp(BH * this.S * 0.42, 46, 190);
     ctx.save();
@@ -1214,6 +1274,7 @@ export class SandToy extends Toy {
     for (const [p, m] of behind) this.drawPrism(ctx, p.pts, p.tex, m);
     this.drawPrism(ctx, b.pts, b.tex, bm);
     this.drawTwinkles(ctx, bm);
+    this.drawCutLines(ctx, bm);
     for (const [p, m] of front) this.drawPrism(ctx, p.pts, p.tex, m);
     this.drawGrains(ctx);
     for (const d of this.drags.values()) if (d.alpha > 0) this.drawKnife(ctx, d, st.knife);

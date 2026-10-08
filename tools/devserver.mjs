@@ -47,6 +47,7 @@ http.createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
       'Cache-Control': 'no-store, must-revalidate',
+      'Access-Control-Allow-Origin': '*', // lets store-upload helpers fetch local screenshots
     });
     res.end(data);
   });

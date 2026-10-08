@@ -88,7 +88,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					F3AD4283517073C6E72099E6 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = 25HT4D9Y9Q;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -145,7 +145,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 25HT4D9Y9Q;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FidgetToyBox/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -288,7 +288,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 25HT4D9Y9Q;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FidgetToyBox/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

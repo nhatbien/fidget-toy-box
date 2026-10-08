@@ -29,7 +29,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: FidgetToyBox/Info.plist
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: 25HT4D9Y9Q
     info:
       path: FidgetToyBox/Info.plist
       properties:
